@@ -1,0 +1,10 @@
+streamlit
+yfinance
+sqlmodel
+psycopg2-binary
+python-dotenv
+plotly
+pandas
+pytest
+flake8
+black
