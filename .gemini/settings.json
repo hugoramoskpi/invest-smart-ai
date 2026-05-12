@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "write_file|replace",
+        "hooks": [
+          {
+            "name": "security-audit",
+            "type": "command",
+            "command": "python .gemini/hooks/audit_security.py",
+            "description": "Verifica se segredos estão sendo expostos no código antes de salvar."
+          }
+        ]
+      }
+    ]
+  }
+}
