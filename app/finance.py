@@ -13,6 +13,34 @@ def get_current_price(ticker: str) -> float:
         print(f"Erro ao buscar preço para {ticker}: {e}")
         return 0.0
 
+def get_historical_price(ticker: str, date: str) -> float:
+    """Busca o preço de fechamento na data informada (ou próximo dia útil)."""
+    try:
+        t = yf.Ticker(ticker)
+        start_dt = pd.to_datetime(date)
+        end_dt = start_dt + timedelta(days=5) # janela para garantir que pega um dia útil
+        hist = t.history(start=start_dt.strftime('%Y-%m-%d'), end=end_dt.strftime('%Y-%m-%d'))
+        if not hist.empty:
+            return round(hist['Close'].iloc[0], 2)
+        return 0.0
+    except:
+        return 0.0
+
+def get_asset_basic_info(ticker: str) -> dict:
+    """Busca o nome e tenta inferir o tipo do ativo."""
+    try:
+        t = yf.Ticker(ticker)
+        info = t.info
+        tipo = "Ações"
+        quote_type = info.get("quoteType", "")
+        if quote_type == "ETF":
+            tipo = "ETFs"
+        elif quote_type == "CRYPTOCURRENCY":
+            tipo = "Cripto"
+        return {"nome": info.get("shortName", info.get("longName", ticker)), "tipo": tipo}
+    except:
+        return {"nome": "", "tipo": "Ações"}
+
 def get_history(ticker: str, period: str = "1mo") -> pd.DataFrame:
     """Busca o histórico de preços para gerar gráficos."""
     try:
@@ -30,9 +58,20 @@ def get_asset_metrics(tickers: list) -> list:
             t = yf.Ticker(ticker)
             info = t.info
             
-            # Data de IPO
+            # Data de IPO - usando fallback para o histórico se firstTradeDateEpoch não existir
             ipo_epoch = info.get("firstTradeDateEpoch")
-            ipo_date = datetime.fromtimestamp(ipo_epoch).strftime('%Y-%m-%d') if ipo_epoch else "N/A"
+            if ipo_epoch:
+                ipo_date = datetime.fromtimestamp(ipo_epoch).strftime('%Y-%m-%d')
+            else:
+                try:
+                    # Busca histórica máxima para ver o primeiro registro
+                    hist_max = t.history(period="max")
+                    if not hist_max.empty:
+                        ipo_date = hist_max.index.min().strftime('%Y-%m-%d')
+                    else:
+                        ipo_date = "N/A"
+                except:
+                    ipo_date = "N/A"
             
             # Análise do Balanço/DRE
             financials = t.financials
@@ -49,11 +88,17 @@ def get_asset_metrics(tickers: list) -> list:
             if financials is not None and not financials.empty and "Total Revenue" in financials.index:
                 revenues = financials.loc["Total Revenue"].dropna().head(4)
                 if len(revenues) >= 2:
-                    # Verifica se o valor mais recente (índice 0) é maior que o anterior, etc.
+                    # Verifica se o valor mais recente (índice 0) é maior que o anterior
+                    # head(4) retorna [atual, anterior, ant-1, ant-2]
+                    # Então comparamos revenues.iloc[i] com revenues.iloc[i+1]
                     receita_sobe = "Sim" if all(revenues.iloc[i] > revenues.iloc[i+1] for i in range(len(revenues)-1)) else "Não"
             
-            # ROIC
-            roic_val = info.get("returnOnCapital", "N/A")
+            # ROIC - tentando returnOnCapital ou returnOnEquity como fallback
+            roic_val = info.get("returnOnCapital")
+            if roic_val is None:
+                # Tenta outras chaves comuns para ROIC dependendo do mercado
+                roic_val = info.get("returnOnAssets")
+            
             if isinstance(roic_val, (int, float)):
                 roic = f"{round(roic_val * 100, 2)}%"
             else:
@@ -102,7 +147,12 @@ def calculate_portfolio_performance(ativos_transacoes):
         if qtd_total <= 0:
             continue
             
-        custo_medio = sum(t.preco * t.quantidade for t in item['transacoes'] if t.tipo_transacao == "Compra") / sum(t.quantidade for t in item['transacoes'] if t.tipo_transacao == "Compra")
+        # Filtra apenas compras para o cálculo do custo médio (simplificado)
+        compras = [t for t in item['transacoes'] if t.tipo_transacao == "Compra"]
+        if not compras:
+            continue
+            
+        custo_medio = sum(t.preco * t.quantidade for t in compras) / sum(t.quantidade for t in compras)
         
         preco_atual = get_current_price(ticker)
         valor_atual = qtd_total * preco_atual
