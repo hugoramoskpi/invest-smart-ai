@@ -3,10 +3,20 @@ from database import create_db_and_tables, engine, Ativo, Transacao
 from sqlmodel import Session, select
 import pandas as pd
 import plotly.express as px
-from finance import calculate_portfolio_performance
+from finance import calculate_portfolio_performance, get_asset_metrics
+from agent.invest_agent import InvestAgent
+from seed import seed_db
 
-# Inicializa o banco de dados
+# Inicializa o banco de dados e a base imaginária
 create_db_and_tables()
+seed_db()
+
+TICKERS_COMUNS = [
+    "PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA", "ABEV3.SA", "WEGE3.SA", "MGLU3.SA", "BBAS3.SA",
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "NFLX",
+    "IVVB11.SA", "BOVA11.SA", "SMAL11.SA",
+    "BTC-USD", "ETH-USD"
+]
 
 st.set_page_config(page_title="InvestSmart", layout="wide", page_icon="📈")
 
@@ -29,10 +39,9 @@ st.title("🚀 InvestSmart: Seu Controle Inteligente")
 
 # Sidebar
 st.sidebar.title("Navegação")
-page = st.sidebar.radio("Ir para:", ["Dashboard", "Minha Carteira", "Registrar Operação", "Assistente IA"])
+page = st.sidebar.radio("Ir para:", ["Dashboard", "Minha Carteira", "Registrar Operação", "Comparação de Ativos", "Assistente IA"])
 
 if page == "Dashboard":
-    # ... (restante do código do Dashboard)
     st.header("Resumo da Performance")
     
     with Session(engine) as session:
@@ -98,8 +107,11 @@ elif page == "Registrar Operação":
     
     with col_a:
         st.subheader("1. Cadastrar Novo Ativo")
+        # Auto-complete/Sugestão de Tickers
+        ticker_sugestao = st.selectbox("Sugestões de Tickers (Auto-complete)", [""] + TICKERS_COMUNS)
+        
         with st.form("novo_ativo"):
-            new_ticker = st.text_input("Ticker (Ex: PETR4.SA)").upper()
+            new_ticker = st.text_input("Ticker (Ex: PETR4.SA)", value=ticker_sugestao).upper()
             new_nome = st.text_input("Nome da Empresa")
             new_tipo = st.selectbox("Tipo", ["Ações", "FIIs", "Cripto", "BDRs", "ETFs"])
             if st.form_submit_button("Cadastrar Ativo"):
@@ -134,6 +146,38 @@ elif page == "Registrar Operação":
                         session.add(nova_t)
                         session.commit()
                         st.success("Operação registrada!")
+
+elif page == "Comparação de Ativos":
+    st.header("⚖️ Comparação de Ativos (Brasil e EUA)")
+    st.write("Compare métricas fundamentalistas de diversas empresas simultaneamente.")
+    
+    tickers_selecionados = st.multiselect(
+        "Selecione os ativos para comparar", 
+        TICKERS_COMUNS, 
+        default=["PETR4.SA", "VALE3.SA", "AAPL", "MSFT"]
+    )
+    
+    outros_tickers = st.text_input("Ou digite outros tickers separados por vírgula (Ex: TSLA, GOOGL, ITUB4.SA)")
+    
+    if st.button("Executar Comparação"):
+        lista_final = list(tickers_selecionados)
+        if outros_tickers:
+            lista_final.extend([t.strip().upper() for t in outros_tickers.split(",") if t.strip()])
+        
+        if not lista_final:
+            st.warning("Selecione ou digite ao menos um ticker.")
+        else:
+            with st.spinner("Buscando dados no Yahoo Finance..."):
+                dados_comp = get_asset_metrics(lista_final)
+                df_comp = pd.DataFrame(dados_comp)
+                st.dataframe(df_comp, use_container_width=True)
+                
+                # Gráfico comparativo de P/L
+                st.subheader("Comparativo Visual: P/L (P/E Ratio)")
+                df_valid = df_comp[df_comp["P/L (P/E)"] != "N/A"]
+                if not df_valid.empty:
+                    fig_pl = px.bar(df_valid, x="Ticker", y="P/L (P/E)", color="Ticker", title="Índice P/L por Ativo")
+                    st.plotly_chart(fig_pl, use_container_width=True)
 
 elif page == "Assistente IA":
     st.header("🤖 Seu Assistente de Investimentos")
@@ -174,4 +218,4 @@ elif page == "Assistente IA":
                 st.session_state.messages.append({"role": "assistant", "content": response})
 
 st.sidebar.markdown("---")
-st.sidebar.caption("v0.1.0 - InvestSmart AI Edition")
+st.sidebar.caption("v0.2.0 - InvestSmart AI Edition")

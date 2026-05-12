@@ -22,6 +22,31 @@ def get_history(ticker: str, period: str = "1mo") -> pd.DataFrame:
         print(f"Erro ao buscar histórico para {ticker}: {e}")
         return pd.DataFrame()
 
+def get_asset_metrics(tickers: list) -> list:
+    """Busca métricas detalhadas para a aba de comparação."""
+    metrics = []
+    for ticker in tickers:
+        try:
+            info = yf.Ticker(ticker).info
+            metrics.append({
+                "Ticker": ticker,
+                "Nome": info.get("shortName", "N/A"),
+                "Setor": info.get("sector", "N/A"),
+                "Preço Atual": info.get("currentPrice", info.get("regularMarketPrice", "N/A")),
+                "P/L (P/E)": info.get("trailingPE", "N/A"),
+                "P/VP (P/B)": info.get("priceToBook", "N/A"),
+                "Div. Yield (%)": round(info.get("dividendYield", 0) * 100, 2) if info.get("dividendYield") else "N/A",
+                "Market Cap": info.get("marketCap", "N/A"),
+                "ROE": info.get("returnOnEquity", "N/A"),
+            })
+        except Exception as e:
+            metrics.append({
+                "Ticker": ticker, "Nome": "Erro ao buscar dados", 
+                "Setor": "-", "Preço Atual": "-", "P/L (P/E)": "-", 
+                "P/VP (P/B)": "-", "Div. Yield (%)": "-", "Market Cap": "-", "ROE": "-"
+            })
+    return metrics
+
 def calculate_portfolio_performance(ativos_transacoes):
     """
     Recebe uma lista de ativos e suas transações e calcula:
