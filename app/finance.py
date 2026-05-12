@@ -27,7 +27,38 @@ def get_asset_metrics(tickers: list) -> list:
     metrics = []
     for ticker in tickers:
         try:
-            info = yf.Ticker(ticker).info
+            t = yf.Ticker(ticker)
+            info = t.info
+            
+            # Data de IPO
+            ipo_epoch = info.get("firstTradeDateEpoch")
+            ipo_date = datetime.fromtimestamp(ipo_epoch).strftime('%Y-%m-%d') if ipo_epoch else "N/A"
+            
+            # Análise do Balanço/DRE
+            financials = t.financials
+            
+            # Lucro Consecutivo (últimos 4 anos)
+            lucro_consecutivo = "N/A"
+            if financials is not None and not financials.empty and "Net Income" in financials.index:
+                net_incomes = financials.loc["Net Income"].dropna().head(4)
+                if len(net_incomes) >= 1:
+                    lucro_consecutivo = "Sim" if all(val > 0 for val in net_incomes) else "Não"
+                    
+            # Receita Sobe Anualmente (últimos 4 anos)
+            receita_sobe = "N/A"
+            if financials is not None and not financials.empty and "Total Revenue" in financials.index:
+                revenues = financials.loc["Total Revenue"].dropna().head(4)
+                if len(revenues) >= 2:
+                    # Verifica se o valor mais recente (índice 0) é maior que o anterior, etc.
+                    receita_sobe = "Sim" if all(revenues.iloc[i] > revenues.iloc[i+1] for i in range(len(revenues)-1)) else "Não"
+            
+            # ROIC
+            roic_val = info.get("returnOnCapital", "N/A")
+            if isinstance(roic_val, (int, float)):
+                roic = f"{round(roic_val * 100, 2)}%"
+            else:
+                roic = "N/A"
+                
             metrics.append({
                 "Ticker": ticker,
                 "Nome": info.get("shortName", "N/A"),
@@ -37,13 +68,18 @@ def get_asset_metrics(tickers: list) -> list:
                 "P/VP (P/B)": info.get("priceToBook", "N/A"),
                 "Div. Yield (%)": round(info.get("dividendYield", 0) * 100, 2) if info.get("dividendYield") else "N/A",
                 "Market Cap": info.get("marketCap", "N/A"),
-                "ROE": info.get("returnOnEquity", "N/A"),
+                "ROE (%)": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") else "N/A",
+                "ROIC": roic,
+                "Data IPO": ipo_date,
+                "Lucro >0 (4A)?": lucro_consecutivo,
+                "Receita Sobe?": receita_sobe
             })
         except Exception as e:
             metrics.append({
                 "Ticker": ticker, "Nome": "Erro ao buscar dados", 
                 "Setor": "-", "Preço Atual": "-", "P/L (P/E)": "-", 
-                "P/VP (P/B)": "-", "Div. Yield (%)": "-", "Market Cap": "-", "ROE": "-"
+                "P/VP (P/B)": "-", "Div. Yield (%)": "-", "Market Cap": "-", "ROE (%)": "-",
+                "ROIC": "-", "Data IPO": "-", "Lucro >0 (4A)?": "-", "Receita Sobe?": "-"
             })
     return metrics
 
