@@ -1,4 +1,5 @@
 import os
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -8,16 +9,20 @@ load_dotenv()
 
 class InvestAgent:
     def __init__(self):
-        # Tenta carregar a chave, se não houver, o agente falhará graciosamente
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            self.llm = None
+        # Prioriza Google Gemini, mas mantém suporte a OpenAI
+        google_key = os.getenv("GOOGLE_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+
+        if google_key and google_key != "sua_chave_do_google_aqui":
+            self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=google_key)
+        elif openai_key:
+            self.llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_key)
         else:
-            self.llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key)
+            self.llm = None
 
     def ask(self, question: str, portfolio_data: str):
         if not self.llm:
-            return "⚠️ Erro: Chave de API da OpenAI não encontrada no arquivo .env."
+            return "⚠️ Erro: Nenhuma chave de API (GOOGLE_API_KEY ou OPENAI_API_KEY) encontrada no arquivo .env."
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", """Você é um assistente financeiro inteligente especializado em investimentos.
