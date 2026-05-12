@@ -14,7 +14,8 @@ class InvestAgent:
         openai_key = os.getenv("OPENAI_API_KEY")
 
         if google_key and google_key != "sua_chave_do_google_aqui":
-            self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=google_key)
+            # Usando gemini-1.5-flash-latest para garantir compatibilidade
+            self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", google_api_key=google_key)
         elif openai_key:
             self.llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_key)
         else:
