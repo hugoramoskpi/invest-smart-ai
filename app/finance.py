@@ -19,7 +19,8 @@ METRICS_HELP = {
     "Receita Sobe?": "Verifica se a receita total da empresa cresceu consecutivamente ano após ano nos últimos 4 anos.",
     "Custo Médio": "Preço médio pago por unidade do ativo, ponderado por todas as compras.",
     "P&L": "Profit & Loss (Lucro ou Prejuízo) nominal deste ativo na sua carteira.",
-    "Rentab. (%)": "Rentabilidade percentual total (Valor Atual / Custo Total) deste ativo."
+    "Rentab. (%)": "Rentabilidade percentual total (Valor Atual / Custo Total) deste ativo.",
+    "País": "País de sede e registro oficial da empresa."
 }
 
 def get_current_price(ticker: str) -> float:
@@ -129,6 +130,7 @@ def get_asset_metrics(tickers: list) -> list:
                 "Ticker": ticker,
                 "Nome": info.get("shortName", "N/A"),
                 "Setor": info.get("sector", "N/A"),
+                "País": info.get("country", "N/A"),
                 "Preço Atual": preco,
                 "P/L (P/E)": pl,
                 "P/VP (P/B)": pvp,
