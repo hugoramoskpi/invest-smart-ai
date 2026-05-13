@@ -23,6 +23,7 @@ class Ativo(SQLModel, table=True):
     ticker: str = Field(index=True, unique=True)
     nome: str
     tipo: str  # Ações, FIIs, Cripto, etc.
+    favorito: bool = Field(default=False)
 
 class Transacao(SQLModel, table=True):
     __table_args__ = {'extend_existing': True}
@@ -32,6 +33,13 @@ class Transacao(SQLModel, table=True):
     quantidade: float
     preco: float
     tipo_transacao: str  # Compra ou Venda
+
+class MetaAlocacao(SQLModel, table=True):
+    __table_args__ = {'extend_existing': True}
+    id: Optional[int] = Field(default=None, primary_key=True)
+    nome: str = Field(unique=True) # Classe de ativo (ex: Ações) ou Ticker (ex: AAPL)
+    alvo_percentual: float 
+    categoria: str # "Classe" ou "Ativo"
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
