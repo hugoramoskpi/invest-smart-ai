@@ -72,13 +72,27 @@ with tab1:
                 if metrics:
                     m = metrics[0]
                     m_col1, m_col2, m_col3, m_col4, m_col5, m_col6 = st.columns(6)
+
+                    # Preço
                     m_col1.metric("Preço Atual", f"R$ {m.get('Preço Atual', 'N/A')}", help=METRICS_HELP["Preço Atual"])
-                    m_col2.metric("P/L (P/E)", m.get("P/L (P/E)", "N/A"), help=METRICS_HELP["P/L (P/E)"])
-                    m_col3.metric("Div. Yield", f"{m.get('Div. Yield (%)', 'N/A')}%", help=METRICS_HELP["Div. Yield (%)"])
-                    m_col4.metric("ROIC", m.get("ROIC (%)", "N/A"), help=METRICS_HELP["ROIC (%)"])
+
+                    # P/L
+                    pl_val = m.get("P/L (P/E)")
+                    m_col2.metric("P/L (P/E)", f"{pl_val:.2f}" if isinstance(pl_val, (int, float)) else "N/A", help=METRICS_HELP["P/L (P/E)"])
+
+                    # Dividend Yield
+                    dy_val = m.get("Div. Yield (%)")
+                    m_col3.metric("Div. Yield", f"{dy_val:.2f}%" if isinstance(dy_val, (int, float)) else "N/A", help=METRICS_HELP["Div. Yield (%)"])
+
+                    # ROIC
+                    roic_val = m.get("ROIC (%)")
+                    m_col4.metric("ROIC", f"{roic_val:.2f}%" if isinstance(roic_val, (int, float)) else "N/A", help=METRICS_HELP["ROIC (%)"])
+
+                    # Lucro Consecutivo
                     m_col5.metric("Lucro Consec. (4A)", m.get("Lucro >0 (4A)?", "N/A"), help=METRICS_HELP["Lucro >0 (4A)?"])
+
+                    # IPO
                     m_col6.metric("Data IPO", m.get("Data IPO", "N/A"), help=METRICS_HELP["Data IPO"])
-            
             with st.spinner(f"Carregando histórico de {ticker}..."):
                 try:
                     t = yf.Ticker(ticker)
