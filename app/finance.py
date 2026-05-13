@@ -103,17 +103,33 @@ def get_asset_metrics(tickers: list) -> list:
                 roic = f"{round(roic_val * 100, 2)}%"
             else:
                 roic = "N/A"
+
+            # Div. Yield (%) - yfinance retorna valor inteiro para BR (ex: 8.42) e decimal para US (ex: 0.37)
+            dy_val = info.get("dividendYield")
+            if isinstance(dy_val, (int, float)):
+                # Se for maior que 1, provavelmente já está em porcentagem (caso comum em ativos BR)
+                # Se for menor que 1, o yfinance costuma retornar em decimal (caso comum em ativos US)
+                if ticker.endswith(".SA"):
+                    dy = round(dy_val, 2)
+                else:
+                    dy = round(dy_val * 100, 2)
+            else:
+                dy = "N/A"
+
+            # ROE (%)
+            roe_val = info.get("returnOnEquity")
+            roe = round(roe_val * 100, 2) if isinstance(roe_val, (int, float)) else "N/A"
                 
             metrics.append({
                 "Ticker": ticker,
                 "Nome": info.get("shortName", "N/A"),
                 "Setor": info.get("sector", "N/A"),
                 "Preço Atual": info.get("currentPrice", info.get("regularMarketPrice", "N/A")),
-                "P/L (P/E)": info.get("trailingPE", "N/A"),
-                "P/VP (P/B)": info.get("priceToBook", "N/A"),
-                "Div. Yield (%)": round(info.get("dividendYield", 0) * 100, 2) if info.get("dividendYield") else "N/A",
+                "P/L (P/E)": round(info.get("trailingPE"), 2) if info.get("trailingPE") else "N/A",
+                "P/VP (P/B)": round(info.get("priceToBook"), 2) if info.get("priceToBook") else "N/A",
+                "Div. Yield (%)": dy,
                 "Market Cap": info.get("marketCap", "N/A"),
-                "ROE (%)": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") else "N/A",
+                "ROE (%)": roe,
                 "ROIC": roic,
                 "Data IPO": ipo_date,
                 "Lucro >0 (4A)?": lucro_consecutivo,
