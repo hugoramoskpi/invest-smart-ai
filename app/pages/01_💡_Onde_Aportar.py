@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from database import engine, Ativo, Transacao, MetaAlocacao
 from sqlmodel import Session, select
-from finance import calculate_portfolio_performance, get_current_price
+from finance import calculate_portfolio_performance, get_current_price, METRICS_HELP
 from style import apply_global_style
 
 st.set_page_config(page_title="Onde Aportar - InvestSmart", layout="wide", page_icon="💡")
@@ -71,12 +71,21 @@ with Session(engine) as session:
         df["Diferença (%)"] = df["Meta (%)"] - df["Atual (%)"]
         
         st.subheader("📊 Situação Atual vs Meta")
-        st.dataframe(df[["Ativo", "Valor Atual", "Atual (%)", "Meta (%)", "Diferença (%)"]].style.format({
-            "Valor Atual": "R$ {:.2f}",
-            "Atual (%)": "{:.2f}%",
-            "Meta (%)": "{:.2f}%",
-            "Diferença (%)": "{:.2f}%"
-        }).background_gradient(subset=["Diferença (%)"], cmap="RdYlGn"), use_container_width=True)
+        st.dataframe(
+            df[["Ativo", "Valor Atual", "Atual (%)", "Meta (%)", "Diferença (%)"]].style.format({
+                "Valor Atual": "R$ {:.2f}",
+                "Atual (%)": "{:.2f}%",
+                "Meta (%)": "{:.2f}%",
+                "Diferença (%)": "{:.2f}%"
+            }).background_gradient(subset=["Diferença (%)"], cmap="RdYlGn"), 
+            column_config={
+                "Valor Atual": st.column_config.Column(help=METRICS_HELP["Valor de Mercado"]),
+                "Atual (%)": st.column_config.Column(help="Porcentagem atual do ativo na sua carteira real."),
+                "Meta (%)": st.column_config.Column(help="Porcentagem que você definiu como objetivo para este ativo."),
+                "Diferença (%)": st.column_config.Column(help="Quanto o ativo está abaixo (positivo) ou acima (negativo) da meta.")
+            },
+            use_container_width=True
+        )
 
         # 3. Sugestão de Aporte
         st.markdown("---")

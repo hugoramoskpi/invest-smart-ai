@@ -2,6 +2,26 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 
+METRICS_HELP = {
+    "Investimento Total": "Soma de todos os aportes realizados (Quantidade x Custo Médio).",
+    "Valor de Mercado": "Valor atualizado da carteira baseado nas cotações mais recentes.",
+    "Lucro/Prejuízo Absoluto": "Diferença financeira entre o Valor de Mercado e o Investimento Total.",
+    "Qtd de Ativos": "Número de ativos diferentes atualmente na sua carteira.",
+    "Preço Atual": "Última cotação de fechamento ou preço em tempo real do ativo.",
+    "P/L (P/E)": "Preço sobre Lucro. Indica quantos anos levaria para reaver o capital investido com o lucro atual. Em geral, quanto menor, mais 'barata' está a empresa.",
+    "P/VP (P/B)": "Preço sobre Valor Patrimonial. Compara o valor de mercado da empresa com seu patrimônio contábil.",
+    "Div. Yield (%)": "Dividend Yield. Rentabilidade dos dividendos pagos nos últimos 12 meses em relação ao preço atual da ação.",
+    "Market Cap": "Valor de Mercado total da empresa na bolsa (número de ações x preço).",
+    "ROE (%)": "Return on Equity (Retorno sobre Patrimônio Líquido). Mede a capacidade da empresa de gerar lucro usando o dinheiro dos acionistas.",
+    "ROIC (%)": "Return on Invested Capital. Mede a eficiência da gestão em gerar retornos sobre todo o capital investido na operação do negócio.",
+    "Data IPO": "Data da oferta pública inicial (quando a empresa estreou na bolsa de valores).",
+    "Lucro >0 (4A)?": "Verifica se a empresa reportou lucro líquido positivo consecutivamente em cada um dos últimos 4 anos fiscais.",
+    "Receita Sobe?": "Verifica se a receita total da empresa cresceu consecutivamente ano após ano nos últimos 4 anos.",
+    "Custo Médio": "Preço médio pago por unidade do ativo, ponderado por todas as compras.",
+    "P&L": "Profit & Loss (Lucro ou Prejuízo) nominal deste ativo na sua carteira.",
+    "Rentab. (%)": "Rentabilidade percentual total (Valor Atual / Custo Total) deste ativo."
+}
+
 def get_current_price(ticker: str) -> float:
     """Busca o preço atual de um ativo via yfinance."""
     try:

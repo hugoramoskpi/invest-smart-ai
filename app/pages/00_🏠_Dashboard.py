@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from database import engine, Ativo, Transacao
 from sqlmodel import Session, select
-from finance import calculate_portfolio_performance
+from finance import calculate_portfolio_performance, METRICS_HELP
 from style import apply_global_style
 
 st.set_page_config(page_title="Dashboard - InvestSmart", layout="wide", page_icon="📊")
@@ -32,10 +32,10 @@ else:
     rent_total = (lucro_total / total_inv * 100) if total_inv > 0 else 0
     
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Investimento Total", f"R$ {total_inv:,.2f}")
-    c2.metric("Valor de Mercado", f"R$ {total_at:,.2f}")
-    c3.metric("Lucro/Prejuízo Absoluto", f"R$ {lucro_total:,.2f}", f"{rent_total:.2f}%")
-    c4.metric("Qtd de Ativos", len(df_perf))
+    c1.metric("Investimento Total", f"R$ {total_inv:,.2f}", help=METRICS_HELP["Investimento Total"])
+    c2.metric("Valor de Mercado", f"R$ {total_at:,.2f}", help=METRICS_HELP["Valor de Mercado"])
+    c3.metric("Lucro/Prejuízo Absoluto", f"R$ {lucro_total:,.2f}", f"{rent_total:.2f}%", help=METRICS_HELP["Lucro/Prejuízo Absoluto"])
+    c4.metric("Qtd de Ativos", len(df_perf), help=METRICS_HELP["Qtd de Ativos"])
 
     st.markdown("---")
     
@@ -69,6 +69,7 @@ else:
             "P&L": "R$ {:.2f}",
             "Rentab. (%)": "{:.2f}%"
         }).background_gradient(subset=["Rentab. (%)"], cmap="RdYlGn"),
+        column_config={k: st.column_config.Column(help=v) for k, v in METRICS_HELP.items()},
         use_container_width=True
     )
     

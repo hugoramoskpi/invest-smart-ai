@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import datetime
-from finance import get_asset_metrics
+from finance import get_asset_metrics, METRICS_HELP
 from database import engine, Ativo
 from sqlmodel import Session, select
 from style import apply_global_style
@@ -25,19 +25,23 @@ TICKERS_COMUNS = [
 st.sidebar.header("🔍 Filtros Reativos")
 
 current_year = datetime.datetime.now().year
-ano_ipo = st.sidebar.slider("Janela Data de IPO", 1800, current_year, (1800, current_year))
+# Janela Móvel IPO (1800 até hoje)
+ano_ipo = st.sidebar.slider("Janela Data de IPO", 1800, current_year, (1800, current_year), help=METRICS_HELP["Data IPO"])
 
-pl_max = st.sidebar.slider("P/L (P/E) Máximo", -50.0, 200.0, 200.0)
-pvp_max = st.sidebar.slider("P/VP (P/B) Máximo", -10.0, 100.0, 100.0)
+# Sliders para métricas numéricas
+pl_max = st.sidebar.slider("P/L (P/E) Máximo", -50.0, 200.0, 200.0, help=METRICS_HELP["P/L (P/E)"])
+pvp_max = st.sidebar.slider("P/VP (P/B) Máximo", -10.0, 100.0, 100.0, help=METRICS_HELP["P/VP (P/B)"])
 
-min_roic = st.sidebar.slider("ROIC Mínimo (%)", -50.0, 150.0, -50.0)
-min_roe = st.sidebar.slider("ROE Mínimo (%)", -50.0, 150.0, -50.0)
-min_dividend = st.sidebar.slider("Div. Yield Mínimo (%)", 0.0, 50.0, 0.0)
+min_roic = st.sidebar.slider("ROIC Mínimo (%)", -50.0, 150.0, -50.0, help=METRICS_HELP["ROIC (%)"])
+min_roe = st.sidebar.slider("ROE Mínimo (%)", -50.0, 150.0, -50.0, help=METRICS_HELP["ROE (%)"])
+min_dividend = st.sidebar.slider("Div. Yield Mínimo (%)", 0.0, 50.0, 0.0, help=METRICS_HELP["Div. Yield (%)"])
 
-min_mcap_b = st.sidebar.number_input("Market Cap Mín. (Bilhões R$/$)", min_value=0.0, value=0.0)
+# Market Cap em Bilhões
+min_mcap_b = st.sidebar.number_input("Market Cap Mín. (Bilhões R$/$)", min_value=0.0, value=0.0, help=METRICS_HELP["Market Cap"])
 
-lucro_apenas = st.sidebar.checkbox("Apenas empresas com Lucro (4A)", value=False)
-receita_crescente = st.sidebar.checkbox("Apenas com Receita Crescente", value=False)
+# Filtros Booleanos
+lucro_apenas = st.sidebar.checkbox("Apenas empresas com Lucro (4A)", value=False, help=METRICS_HELP["Lucro >0 (4A)?"])
+receita_crescente = st.sidebar.checkbox("Apenas com Receita Crescente", value=False, help=METRICS_HELP["Receita Sobe?"])
 
 # --- SELEÇÃO DE ATIVOS ---
 tickers_selecionados = st.multiselect(
@@ -102,6 +106,7 @@ if "raw_df_comp" in st.session_state:
             "ROE (%)": "{:.2f}%",
             "ROIC (%)": "{:.2f}%"
         }, na_rep="N/A"),
+        column_config={k: st.column_config.Column(help=v) for k, v in METRICS_HELP.items()},
         use_container_width=True
     )
     
@@ -154,4 +159,4 @@ if "raw_df_comp" in st.session_state:
 else:
     st.info("Clique em 'Buscar Dados' para iniciar a comparação.")
 
-st.sidebar.caption("v0.4.2 - InvestSmart AI Edition")
+st.sidebar.caption("v0.4.3 - InvestSmart AI Edition")

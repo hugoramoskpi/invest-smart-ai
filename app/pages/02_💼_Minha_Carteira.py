@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import yfinance as yf
 from database import engine, Ativo, Transacao
 from sqlmodel import Session, select
-from finance import calculate_portfolio_performance, get_asset_metrics
+from finance import calculate_portfolio_performance, get_asset_metrics, METRICS_HELP
 from style import apply_global_style
 
 st.set_page_config(page_title="Minha Carteira - InvestSmart", layout="wide", page_icon="💼")
@@ -72,12 +72,12 @@ with tab1:
                 if metrics:
                     m = metrics[0]
                     m_col1, m_col2, m_col3, m_col4, m_col5, m_col6 = st.columns(6)
-                    m_col1.metric("Preço Atual", f"R$ {m.get('Preço Atual', 'N/A')}")
-                    m_col2.metric("P/L (P/E)", m.get("P/L (P/E)", "N/A"))
-                    m_col3.metric("Div. Yield", f"{m.get('Div. Yield (%)', 'N/A')}%")
-                    m_col4.metric("ROIC", m.get("ROIC (%)", "N/A"))
-                    m_col5.metric("Lucro Consec. (4A)", m.get("Lucro >0 (4A)?", "N/A"))
-                    m_col6.metric("Data IPO", m.get("Data IPO", "N/A"))
+                    m_col1.metric("Preço Atual", f"R$ {m.get('Preço Atual', 'N/A')}", help=METRICS_HELP["Preço Atual"])
+                    m_col2.metric("P/L (P/E)", m.get("P/L (P/E)", "N/A"), help=METRICS_HELP["P/L (P/E)"])
+                    m_col3.metric("Div. Yield", f"{m.get('Div. Yield (%)', 'N/A')}%", help=METRICS_HELP["Div. Yield (%)"])
+                    m_col4.metric("ROIC", m.get("ROIC (%)", "N/A"), help=METRICS_HELP["ROIC (%)"])
+                    m_col5.metric("Lucro Consec. (4A)", m.get("Lucro >0 (4A)?", "N/A"), help=METRICS_HELP["Lucro >0 (4A)?"])
+                    m_col6.metric("Data IPO", m.get("Data IPO", "N/A"), help=METRICS_HELP["Data IPO"])
             
             with st.spinner(f"Carregando histórico de {ticker}..."):
                 try:
@@ -140,6 +140,7 @@ with tab2:
                         "ROE (%)": "{:.2f}%",
                         "ROIC (%)": "{:.2f}%"
                     }, na_rep="N/A"),
+                    column_config={k: st.column_config.Column(help=v) for k, v in METRICS_HELP.items()},
                     use_container_width=True
                 )
                 
