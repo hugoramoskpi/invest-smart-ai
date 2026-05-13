@@ -1,5 +1,6 @@
 import yfinance as yf
 import pandas as pd
+import time
 from datetime import datetime, timedelta
 
 METRICS_HELP = {
@@ -76,8 +77,14 @@ def get_asset_metrics(tickers: list) -> list:
     metrics = []
     for ticker in tickers:
         try:
+            # Pausa dinâmica para evitar bloqueios em massa
+            time.sleep(0.3)
             t = yf.Ticker(ticker)
             info = t.info
+            
+            if not info or "shortName" not in info:
+                # Se não houver info mínima, ignora para retentar depois (fundamental para o screener)
+                continue
             
             # 1. Data de IPO
             ipo_epoch = info.get("firstTradeDateEpoch")
@@ -85,8 +92,8 @@ def get_asset_metrics(tickers: list) -> list:
                 ipo_date = datetime.fromtimestamp(ipo_epoch).strftime('%Y-%m-%d')
             else:
                 try:
-                    hist_max = t.history(period="max")
-                    ipo_date = hist_max.index.min().strftime('%Y-%m-%d') if not hist_max.empty else "N/A"
+                    hist_max = t.history(period="1mo") # Tenta ver se há histórico
+                    ipo_date = "N/A" # Para o screener global, evitar buscar histórico MAX de 7000 ativos
                 except:
                     ipo_date = "N/A"
             
@@ -114,7 +121,7 @@ def get_asset_metrics(tickers: list) -> list:
             dy_val = info.get("dividendYield")
             dy = dy_val if isinstance(dy_val, (int, float)) else None
 
-            # 5. Market Cap (Bruto)
+            # 5. Market Cap
             m_cap = info.get("marketCap")
             
             # 6. ROE (%)
@@ -143,9 +150,13 @@ def get_asset_metrics(tickers: list) -> list:
                 "Receita Sobe?": receita_sobe
             })
         except Exception as e:
+            if "429" in str(e) or "Too Many Requests" in str(e):
+                # Se for rate limited, aborta o lote para não poluir com erros
+                break
+            # Outros erros (ex: ticker inválido)
             metrics.append({
                 "Ticker": ticker, "Nome": "Erro ao buscar dados", 
-                "Setor": "-", "Preço Atual": None, "P/L (P/E)": None, 
+                "Setor": "-", "País": "-", "Preço Atual": None, "P/L (P/E)": None, 
                 "P/VP (P/B)": None, "Div. Yield (%)": None, "Market Cap": None, "ROE (%)": None,
                 "ROIC (%)": None, "Data IPO": "N/A", "Lucro >0 (4A)?": "N/A", "Receita Sobe?": "N/A"
             })
