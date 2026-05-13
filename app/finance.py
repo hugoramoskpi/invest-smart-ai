@@ -50,6 +50,18 @@ def get_history(ticker: str, period: str = "1mo") -> pd.DataFrame:
         print(f"Erro ao buscar histórico para {ticker}: {e}")
         return pd.DataFrame()
 
+def format_market_cap(value):
+    """Formata Market Cap para Bilhões ou Trilhões."""
+    if not isinstance(value, (int, float)):
+        return "N/A"
+    if value >= 1e12:
+        return f"T$ {value / 1e12:.2f}T"
+    if value >= 1e9:
+        return f"B$ {value / 1e9:.2f}B"
+    if value >= 1e6:
+        return f"M$ {value / 1e6:.2f}M"
+    return str(value)
+
 def get_asset_metrics(tickers: list) -> list:
     """Busca métricas detalhadas para a aba de comparação."""
     metrics = []
@@ -58,77 +70,62 @@ def get_asset_metrics(tickers: list) -> list:
             t = yf.Ticker(ticker)
             info = t.info
             
-            # Data de IPO - usando fallback para o histórico se firstTradeDateEpoch não existir
+            # 1. Data de IPO
             ipo_epoch = info.get("firstTradeDateEpoch")
             if ipo_epoch:
                 ipo_date = datetime.fromtimestamp(ipo_epoch).strftime('%Y-%m-%d')
             else:
                 try:
-                    # Busca histórica máxima para ver o primeiro registro
                     hist_max = t.history(period="max")
-                    if not hist_max.empty:
-                        ipo_date = hist_max.index.min().strftime('%Y-%m-%d')
-                    else:
-                        ipo_date = "N/A"
+                    ipo_date = hist_max.index.min().strftime('%Y-%m-%d') if not hist_max.empty else "N/A"
                 except:
                     ipo_date = "N/A"
             
-            # Análise do Balanço/DRE
+            # 2. Análise do Balanço/DRE
             financials = t.financials
-            
-            # Lucro Consecutivo (últimos 4 anos)
             lucro_consecutivo = "N/A"
-            if financials is not None and not financials.empty and "Net Income" in financials.index:
-                net_incomes = financials.loc["Net Income"].dropna().head(4)
-                if len(net_incomes) >= 1:
-                    lucro_consecutivo = "Sim" if all(val > 0 for val in net_incomes) else "Não"
-                    
-            # Receita Sobe Anualmente (últimos 4 anos)
             receita_sobe = "N/A"
-            if financials is not None and not financials.empty and "Total Revenue" in financials.index:
-                revenues = financials.loc["Total Revenue"].dropna().head(4)
-                if len(revenues) >= 2:
-                    # Verifica se o valor mais recente (índice 0) é maior que o anterior
-                    # head(4) retorna [atual, anterior, ant-1, ant-2]
-                    # Então comparamos revenues.iloc[i] com revenues.iloc[i+1]
-                    receita_sobe = "Sim" if all(revenues.iloc[i] > revenues.iloc[i+1] for i in range(len(revenues)-1)) else "Não"
             
-            # ROIC - tentando returnOnCapital ou returnOnEquity como fallback
-            roic_val = info.get("returnOnCapital")
-            if roic_val is None:
-                # Tenta outras chaves comuns para ROIC dependendo do mercado
-                roic_val = info.get("returnOnAssets")
+            if financials is not None and not financials.empty:
+                if "Net Income" in financials.index:
+                    net_incomes = financials.loc["Net Income"].dropna().head(4)
+                    if len(net_incomes) >= 1:
+                        lucro_consecutivo = "Sim" if all(val > 0 for val in net_incomes) else "Não"
+                
+                if "Total Revenue" in financials.index:
+                    revenues = financials.loc["Total Revenue"].dropna().head(4)
+                    if len(revenues) >= 2:
+                        receita_sobe = "Sim" if all(revenues.iloc[i] > revenues.iloc[i+1] for i in range(len(revenues)-1)) else "Não"
             
-            if isinstance(roic_val, (int, float)):
-                roic = f"{round(roic_val * 100, 2)}%"
-            else:
-                roic = "N/A"
+            # 3. ROIC
+            roic_val = info.get("returnOnCapital") or info.get("returnOnAssets")
+            roic = f"{round(roic_val * 100, 2)}%" if isinstance(roic_val, (int, float)) else "N/A"
 
-            # Div. Yield (%) - yfinance retorna valor inteiro para BR (ex: 8.42) e decimal para US (ex: 0.37)
+            # 4. Dividend Yield (%)
             dy_val = info.get("dividendYield")
-            if isinstance(dy_val, (int, float)):
-                # Se for maior que 1, provavelmente já está em porcentagem (caso comum em ativos BR)
-                # Se for menor que 1, o yfinance costuma retornar em decimal (caso comum em ativos US)
-                if ticker.endswith(".SA"):
-                    dy = round(dy_val, 2)
-                else:
-                    dy = round(dy_val * 100, 2)
-            else:
-                dy = "N/A"
+            dy = round(dy_val, 2) if isinstance(dy_val, (int, float)) else "N/A"
 
-            # ROE (%)
+            # 5. Market Cap
+            m_cap = format_market_cap(info.get("marketCap"))
+            
+            # 6. ROE (%)
             roe_val = info.get("returnOnEquity")
             roe = round(roe_val * 100, 2) if isinstance(roe_val, (int, float)) else "N/A"
+
+            # 7. Preço e Valuation
+            preco = info.get("currentPrice", info.get("regularMarketPrice", "N/A"))
+            pl = round(info.get("trailingPE"), 2) if info.get("trailingPE") else "N/A"
+            pvp = round(info.get("priceToBook"), 2) if info.get("priceToBook") else "N/A"
                 
             metrics.append({
                 "Ticker": ticker,
                 "Nome": info.get("shortName", "N/A"),
                 "Setor": info.get("sector", "N/A"),
-                "Preço Atual": info.get("currentPrice", info.get("regularMarketPrice", "N/A")),
-                "P/L (P/E)": round(info.get("trailingPE"), 2) if info.get("trailingPE") else "N/A",
-                "P/VP (P/B)": round(info.get("priceToBook"), 2) if info.get("priceToBook") else "N/A",
+                "Preço Atual": preco,
+                "P/L (P/E)": pl,
+                "P/VP (P/B)": pvp,
                 "Div. Yield (%)": dy,
-                "Market Cap": info.get("marketCap", "N/A"),
+                "Market Cap": m_cap,
                 "ROE (%)": roe,
                 "ROIC": roic,
                 "Data IPO": ipo_date,
@@ -146,10 +143,7 @@ def get_asset_metrics(tickers: list) -> list:
 
 def calculate_portfolio_performance(ativos_transacoes):
     """
-    Recebe uma lista de ativos e suas transações e calcula:
-    - Custo Total
-    - Valor Atual
-    - Lucro/Prejuízo (P&L)
+    Recebe uma lista de ativos e suas transações e calcula performance.
     """
     performance = []
     total_investido = 0
@@ -163,7 +157,6 @@ def calculate_portfolio_performance(ativos_transacoes):
         if qtd_total <= 0:
             continue
             
-        # Filtra apenas compras para o cálculo do custo médio (simplificado)
         compras = [t for t in item['transacoes'] if t.tipo_transacao == "Compra"]
         if not compras:
             continue
