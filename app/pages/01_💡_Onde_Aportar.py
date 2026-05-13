@@ -3,8 +3,12 @@ import pandas as pd
 from database import engine, Ativo, Transacao, MetaAlocacao
 from sqlmodel import Session, select
 from finance import calculate_portfolio_performance, get_current_price
+from style import apply_global_style
 
-st.set_page_config(page_title="Onde Aportar - InvestSmart", layout="wide")
+st.set_page_config(page_title="Onde Aportar - InvestSmart", layout="wide", page_icon="💡")
+
+# Aplica o Estilo Unificado
+apply_global_style()
 
 st.header("💡 Inteligência de Aporte e Rebalanceamento")
 st.write("Defina suas metas e descubra onde investir para manter o equilíbrio da carteira.")
@@ -94,3 +98,5 @@ with Session(engine) as session:
                 
                 for _, row in df_sugestao.iterrows():
                     st.info(f"**{row['Ativo']}**: Sugestão de aporte de **R$ {row['Valor a Aportar']:.2f}**")
+
+st.sidebar.caption("v0.4.3 - InvestSmart AI Edition")

@@ -3,8 +3,12 @@ import pandas as pd
 from database import engine, Ativo, Transacao
 from sqlmodel import Session, select
 from finance import get_asset_basic_info, get_historical_price
+from style import apply_global_style
 
-st.set_page_config(page_title="Registrar Operação - InvestSmart", layout="wide")
+st.set_page_config(page_title="Registrar Operação - InvestSmart", layout="wide", page_icon="📝")
+
+# Aplica o Estilo Unificado
+apply_global_style()
 
 st.header("📝 Nova Transação")
 
@@ -92,3 +96,5 @@ with col_b:
                         session.add(nova_t)
                         session.commit()
                         st.success("Operação registrada!")
+
+st.sidebar.caption("v0.4.3 - InvestSmart AI Edition")

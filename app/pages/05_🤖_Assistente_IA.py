@@ -3,8 +3,12 @@ from database import engine, Ativo, Transacao
 from sqlmodel import Session, select
 from finance import calculate_portfolio_performance
 from agent.invest_agent import InvestAgent
+from style import apply_global_style
 
-st.set_page_config(page_title="Assistente IA - InvestSmart", layout="wide")
+st.set_page_config(page_title="Assistente IA - InvestSmart", layout="wide", page_icon="🤖")
+
+# Aplica o Estilo Unificado
+apply_global_style()
 
 st.header("🤖 Seu Assistente de Investimentos")
 st.write("Pergunte qualquer coisa sobre sua carteira atual.")
@@ -14,7 +18,8 @@ with Session(engine) as session:
     dados_carteira = []
     for a in ativos:
         transacoes = session.exec(select(Transacao).where(Transacao.ativo_id == a.id)).all()
-        dados_carteira.append({"ticker": a.ticker, "transacoes": transacoes})
+        if transacoes:
+            dados_carteira.append({"ticker": a.ticker, "transacoes": transacoes})
         
 if not dados_carteira:
     st.info("Você precisa ter ativos registrados para usar o assistente.")
@@ -42,3 +47,5 @@ else:
             response = agent.ask(prompt, contexto)
             st.markdown(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
+
+st.sidebar.caption("v0.4.3 - InvestSmart AI Edition")

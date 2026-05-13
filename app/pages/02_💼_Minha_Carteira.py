@@ -6,8 +6,12 @@ import yfinance as yf
 from database import engine, Ativo, Transacao
 from sqlmodel import Session, select
 from finance import calculate_portfolio_performance, get_asset_metrics
+from style import apply_global_style
 
-st.set_page_config(page_title="Minha Carteira - InvestSmart", layout="wide")
+st.set_page_config(page_title="Minha Carteira - InvestSmart", layout="wide", page_icon="💼")
+
+# Aplica o Estilo Unificado
+apply_global_style()
 
 tab1, tab2 = st.tabs(["💼 Minha Carteira", "🧪 Estudos (Watchlist)"])
 
@@ -71,7 +75,7 @@ with tab1:
                     m_col1.metric("Preço Atual", f"R$ {m.get('Preço Atual', 'N/A')}")
                     m_col2.metric("P/L (P/E)", m.get("P/L (P/E)", "N/A"))
                     m_col3.metric("Div. Yield", f"{m.get('Div. Yield (%)', 'N/A')}%")
-                    m_col4.metric("ROIC", m.get("ROIC", "N/A"))
+                    m_col4.metric("ROIC", m.get("ROIC (%)", "N/A"))
                     m_col5.metric("Lucro Consec. (4A)", m.get("Lucro >0 (4A)?", "N/A"))
                     m_col6.metric("Data IPO", m.get("Data IPO", "N/A"))
             
@@ -124,7 +128,20 @@ with tab2:
             with st.spinner("Buscando dados das empresas em estudo..."):
                 metrics_estudos = get_asset_metrics(lista_estudos)
                 df_estudos = pd.DataFrame(metrics_estudos)
-                st.dataframe(df_estudos, use_container_width=True)
+                
+                # Renderização formatada
+                st.dataframe(
+                    df_estudos.style.format({
+                        "Preço Atual": "R$ {:.2f}",
+                        "P/L (P/E)": "{:.2f}",
+                        "P/VP (P/B)": "{:.2f}",
+                        "Div. Yield (%)": "{:.2f}%",
+                        "Market Cap": lambda x: f"B$ {x/1e9:.2f}B" if pd.notnull(x) and x > 0 else "N/A",
+                        "ROE (%)": "{:.2f}%",
+                        "ROIC (%)": "{:.2f}%"
+                    }, na_rep="N/A"),
+                    use_container_width=True
+                )
                 
                 for ticker in lista_estudos:
                     if st.button(f"Remover {ticker} dos Estudos", key=f"rem_{ticker}"):
@@ -133,3 +150,5 @@ with tab2:
                         session.add(ativo_db)
                         session.commit()
                         st.rerun()
+
+st.sidebar.caption("v0.4.3 - InvestSmart AI Edition")
