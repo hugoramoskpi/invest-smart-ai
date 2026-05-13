@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import datetime
 import os
-import subprocess
+import concurrent.futures
 from finance import get_asset_metrics, METRICS_HELP
 from database import engine, Ativo
 from sqlmodel import Session, select
@@ -71,7 +71,6 @@ def apply_filters(df):
     return df_f
 
 if modo_analise == "🔍 Tempo Real (Ativos Específicos)":
-    # Lógica original de busca específica
     TICKERS_COMUNS = ["PETR4.SA", "VALE3.SA", "AAPL", "MSFT", "GOOGL", "AMZN", "BTC-USD"]
     sel_tickers = st.multiselect("Selecione ativos:", TICKERS_COMUNS, default=["PETR4.SA", "AAPL"])
     extra_tickers = st.text_input("Outros tickers (virgula):")
@@ -87,41 +86,65 @@ if modo_analise == "🔍 Tempo Real (Ativos Específicos)":
     if "df_tempo_real" in st.session_state:
         df_res = apply_filters(st.session_state.df_tempo_real)
         st.subheader(f"📊 Resultados ({len(df_res)} ativos)")
-        st.dataframe(df_res.style.format({"Preço Atual": "R$ {:.2f}", "P/L (P/E)": "{:.2f}", "P/VP (P/B)": "{:.2f}", "Div. Yield (%)": "{:.2f}%", "Market Cap": lambda x: f"B$ {x/1e9:.2f}B" if pd.notnull(x) else "N/A", "ROE (%)": "{:.2f}%", "ROIC (%)": "{:.2f}%"}), column_config={k: st.column_config.Column(help=v) for k, v in METRICS_HELP.items()}, use_container_width=True)
+        st.dataframe(df_res.style.format({"Preço Atual": "{:.2f}", "P/L (P/E)": "{:.2f}", "P/VP (P/B)": "{:.2f}", "Div. Yield (%)": "{:.2f}%", "Market Cap": lambda x: f"B$ {x/1e9:.2f}B" if pd.notnull(x) else "N/A", "ROE (%)": "{:.2f}%", "ROIC (%)": "{:.2f}%"}), column_config={k: st.column_config.Column(help=v) for k, v in METRICS_HELP.items()}, use_container_width=True)
 
 else:
-    # MODO SCREENER GLOBAL
     DB_FILE = "market_database.csv"
-    
     st.subheader("🌍 Screener Global (Mercado Total)")
-    st.info("Este modo permite filtrar milhares de ativos instantaneamente usando a base local sincronizada.")
     
+    # --- FUNÇÃO DE SINCRONIZAÇÃO DENTRO DO STREAMLIT ---
+    def sync_inside_streamlit():
+        tickers = get_all_market_tickers()
+        total = len(tickers)
+        batch_size = 30
+        all_data = []
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_batch = {
+                executor.submit(get_asset_metrics, tickers[i:i + batch_size]): i 
+                for i in range(0, total, batch_size)
+            }
+            
+            processed = 0
+            for future in concurrent.futures.as_completed(future_to_batch):
+                try:
+                    data = future.result()
+                    all_data.extend(data)
+                    processed += len(data)
+                    percent = min(processed / total, 1.0)
+                    progress_bar.progress(percent)
+                    status_text.text(f"🚀 Sincronizando: {processed}/{total} ativos processados...")
+                except Exception as e:
+                    st.error(f"Erro no lote: {e}")
+
+        df = pd.DataFrame(all_data)
+        df.to_csv(DB_FILE, index=False, encoding='utf-8-sig')
+        st.session_state.df_global = df
+        status_text.success(f"✅ Base de dados atualizada com sucesso ({len(df)} ativos)!")
+
     if not os.path.exists(DB_FILE):
         st.warning("⚠️ Base de dados local não encontrada!")
-        if st.button("🔨 Gerar Base de Dados Inicial (Isso pode demorar bastante)"):
-            with st.spinner("Iniciando sincronização massiva..."):
-                # Roda o script de sincronização como um processo separado para não travar o streamlit
-                subprocess.Popen(["python", "sync_market_db.py"])
-                st.info("Sincronização iniciada em segundo plano! Acompanhe o progresso no terminal. O arquivo aparecerá aqui quando pronto.")
+        if st.button("🔨 Gerar Base de Dados Inicial (Feedback Visual Ativo)"):
+            sync_inside_streamlit()
     else:
-        # Carrega a base local
         if "df_global" not in st.session_state:
             st.session_state.df_global = pd.read_csv(DB_FILE)
             
-        st.write(f"✅ Base carregada com **{len(st.session_state.df_global)}** ativos (VTI/Russell 3000 + B3).")
+        st.write(f"✅ Base carregada com **{len(st.session_state.df_global)}** ativos.")
         
-        if st.button("🔄 Atualizar Base de Dados"):
-             subprocess.Popen(["python", "sync_market_db.py"])
-             st.success("Atualização iniciada em segundo plano!")
+        if st.button("🔄 Forçar Atualização da Base"):
+             sync_inside_streamlit()
 
         df_res = apply_filters(st.session_state.df_global)
         st.subheader(f"🎯 Filtro Global: {len(df_res)} ativos encontrados")
         
-        # Busca por nome ou ticker dentro do Screener
-        search_query = st.text_input("Filtrar por Ticker ou Nome dentro do Screener:", "").upper()
+        search_query = st.text_input("Filtrar por Ticker ou Nome:", "").upper()
         if search_query:
             df_res = df_res[df_res["Ticker"].str.contains(search_query) | df_res["Nome"].str.upper().str.contains(search_query)]
 
         st.dataframe(df_res.style.format({"Preço Atual": "{:.2f}", "P/L (P/E)": "{:.2f}", "P/VP (P/B)": "{:.2f}", "Div. Yield (%)": "{:.2f}%", "Market Cap": lambda x: f"B$ {x/1e9:.2f}B" if pd.notnull(x) else "N/A", "ROE (%)": "{:.2f}%", "ROIC (%)": "{:.2f}%"}), column_config={k: st.column_config.Column(help=v) for k, v in METRICS_HELP.items()}, use_container_width=True)
 
-st.sidebar.caption("v0.5.0 - InvestSmart Enterprise Edition")
+st.sidebar.caption("v0.5.1 - InvestSmart Enterprise Edition")
