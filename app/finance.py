@@ -50,18 +50,6 @@ def get_history(ticker: str, period: str = "1mo") -> pd.DataFrame:
         print(f"Erro ao buscar histórico para {ticker}: {e}")
         return pd.DataFrame()
 
-def format_market_cap(value):
-    """Formata Market Cap para Bilhões ou Trilhões."""
-    if not isinstance(value, (int, float)):
-        return "N/A"
-    if value >= 1e12:
-        return f"T$ {value / 1e12:.2f}T"
-    if value >= 1e9:
-        return f"B$ {value / 1e9:.2f}B"
-    if value >= 1e6:
-        return f"M$ {value / 1e6:.2f}M"
-    return str(value)
-
 def get_asset_metrics(tickers: list) -> list:
     """Busca métricas detalhadas para a aba de comparação."""
     metrics = []
@@ -99,23 +87,23 @@ def get_asset_metrics(tickers: list) -> list:
             
             # 3. ROIC
             roic_val = info.get("returnOnCapital") or info.get("returnOnAssets")
-            roic = f"{round(roic_val * 100, 2)}%" if isinstance(roic_val, (int, float)) else "N/A"
+            roic = roic_val * 100 if isinstance(roic_val, (int, float)) else None
 
             # 4. Dividend Yield (%)
             dy_val = info.get("dividendYield")
-            dy = round(dy_val, 2) if isinstance(dy_val, (int, float)) else "N/A"
+            dy = dy_val if isinstance(dy_val, (int, float)) else None
 
-            # 5. Market Cap
-            m_cap = format_market_cap(info.get("marketCap"))
+            # 5. Market Cap (Bruto)
+            m_cap = info.get("marketCap")
             
             # 6. ROE (%)
             roe_val = info.get("returnOnEquity")
-            roe = round(roe_val * 100, 2) if isinstance(roe_val, (int, float)) else "N/A"
+            roe = roe_val * 100 if isinstance(roe_val, (int, float)) else None
 
             # 7. Preço e Valuation
-            preco = info.get("currentPrice", info.get("regularMarketPrice", "N/A"))
-            pl = round(info.get("trailingPE"), 2) if info.get("trailingPE") else "N/A"
-            pvp = round(info.get("priceToBook"), 2) if info.get("priceToBook") else "N/A"
+            preco = info.get("currentPrice", info.get("regularMarketPrice"))
+            pl = info.get("trailingPE")
+            pvp = info.get("priceToBook")
                 
             metrics.append({
                 "Ticker": ticker,
@@ -127,7 +115,7 @@ def get_asset_metrics(tickers: list) -> list:
                 "Div. Yield (%)": dy,
                 "Market Cap": m_cap,
                 "ROE (%)": roe,
-                "ROIC": roic,
+                "ROIC (%)": roic,
                 "Data IPO": ipo_date,
                 "Lucro >0 (4A)?": lucro_consecutivo,
                 "Receita Sobe?": receita_sobe
@@ -135,9 +123,9 @@ def get_asset_metrics(tickers: list) -> list:
         except Exception as e:
             metrics.append({
                 "Ticker": ticker, "Nome": "Erro ao buscar dados", 
-                "Setor": "-", "Preço Atual": "-", "P/L (P/E)": "-", 
-                "P/VP (P/B)": "-", "Div. Yield (%)": "-", "Market Cap": "-", "ROE (%)": "-",
-                "ROIC": "-", "Data IPO": "-", "Lucro >0 (4A)?": "-", "Receita Sobe?": "-"
+                "Setor": "-", "Preço Atual": None, "P/L (P/E)": None, 
+                "P/VP (P/B)": None, "Div. Yield (%)": None, "Market Cap": None, "ROE (%)": None,
+                "ROIC (%)": None, "Data IPO": "N/A", "Lucro >0 (4A)?": "N/A", "Receita Sobe?": "N/A"
             })
     return metrics
 

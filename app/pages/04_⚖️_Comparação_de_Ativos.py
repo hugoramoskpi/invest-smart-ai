@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import datetime
 from finance import get_asset_metrics
 from database import engine, Ativo
 from sqlmodel import Session, select
@@ -8,7 +9,7 @@ from sqlmodel import Session, select
 st.set_page_config(page_title="Comparação de Ativos - InvestSmart", layout="wide")
 
 st.header("⚖️ Comparação de Ativos (Brasil e EUA)")
-st.write("Compare métricas fundamentalistas e filtre os melhores ativos.")
+st.write("Compare métricas fundamentalistas e filtre os melhores ativos em tempo real.")
 
 TICKERS_COMUNS = [
     "PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBDC4.SA", "ABEV3.SA", "WEGE3.SA", "MGLU3.SA", "BBAS3.SA",
@@ -16,13 +17,29 @@ TICKERS_COMUNS = [
     "IVVB11.SA", "BOVA11.SA", "SMAL11.SA"
 ]
 
-# Configuração de Filtros na Sidebar
-st.sidebar.header("🔍 Filtros de Busca")
-min_roic = st.sidebar.slider("ROIC Mínimo (%)", -50, 100, -50)
-min_dividend = st.sidebar.slider("Div. Yield Mínimo (%)", 0, 30, 0)
+# --- CONFIGURAÇÃO DOS FILTROS DINÂMICOS (SIDEBAR) ---
+st.sidebar.header("🔍 Filtros Reativos")
+
+current_year = datetime.datetime.now().year
+# Janela Móvel IPO (1800 até hoje)
+ano_ipo = st.sidebar.slider("Janela Data de IPO", 1800, current_year, (1800, current_year))
+
+# Sliders para métricas numéricas
+pl_max = st.sidebar.slider("P/L (P/E) Máximo", -50.0, 200.0, 200.0)
+pvp_max = st.sidebar.slider("P/VP (P/B) Máximo", -10.0, 100.0, 100.0)
+
+min_roic = st.sidebar.slider("ROIC Mínimo (%)", -50.0, 150.0, -50.0)
+min_roe = st.sidebar.slider("ROE Mínimo (%)", -50.0, 150.0, -50.0)
+min_dividend = st.sidebar.slider("Div. Yield Mínimo (%)", 0.0, 50.0, 0.0)
+
+# Market Cap em Bilhões
+min_mcap_b = st.sidebar.number_input("Market Cap Mín. (Bilhões R$/$)", min_value=0.0, value=0.0)
+
+# Filtros Booleanos
 lucro_apenas = st.sidebar.checkbox("Apenas empresas com Lucro (4A)", value=False)
 receita_crescente = st.sidebar.checkbox("Apenas com Receita Crescente", value=False)
 
+# --- SELEÇÃO DE ATIVOS ---
 tickers_selecionados = st.multiselect(
     "Selecione os ativos para comparar", 
     TICKERS_COMUNS, 
@@ -31,11 +48,8 @@ tickers_selecionados = st.multiselect(
 
 outros_tickers = st.text_input("Ou digite outros tickers separados por vírgula (Ex: TSLA, GOOGL, ITUB4.SA)")
 
-col_btn1, col_btn2 = st.columns([1, 4])
-
-executar = col_btn1.button("Executar Comparação")
-
-if executar:
+# --- BOTÃO DE BUSCA (Apenas para carregar dados novos) ---
+if st.button("🚀 Buscar/Atualizar Dados do Mercado"):
     lista_final = list(tickers_selecionados)
     if outros_tickers:
         lista_final.extend([t.strip().upper() for t in outros_tickers.split(",") if t.strip()])
@@ -43,90 +57,107 @@ if executar:
     if not lista_final:
         st.warning("Selecione ou digite ao menos um ticker.")
     else:
-        st.session_state.last_comparison = lista_final
-        with st.spinner("Buscando dados no Yahoo Finance..."):
+        with st.spinner("Consultando Yahoo Finance..."):
             dados_comp = get_asset_metrics(lista_final)
-            df_comp = pd.DataFrame(dados_comp)
-            
-            # Aplicando Filtros
-            def parse_pct(val):
-                try:
-                    return float(str(val).replace('%', ''))
-                except:
-                    return -999.0
-            
-            if "ROIC" in df_comp.columns:
-                df_comp["roic_num"] = df_comp["ROIC"].apply(parse_pct)
-                df_comp = df_comp[df_comp["roic_num"] >= min_roic]
-            
-            if "Div. Yield (%)" in df_comp.columns:
-                df_comp = df_comp[(df_comp["Div. Yield (%)"] == "N/A") | (df_comp["Div. Yield (%)"] >= min_dividend)]
-            
-            if lucro_apenas:
-                df_comp = df_comp[df_comp["Lucro >0 (4A)?"] == "Sim"]
-                
-            if receita_crescente:
-                df_comp = df_comp[df_comp["Receita Sobe?"] == "Sim"]
+            st.session_state.raw_df_comp = pd.DataFrame(dados_comp)
+            st.success("Dados carregados! Agora use os filtros na esquerda para analisar.")
 
-            st.session_state.df_comp = df_comp
+# --- LÓGICA DE FILTRAGEM REATIVA ---
+if "raw_df_comp" in st.session_state:
+    df_filtered = st.session_state.raw_df_comp.copy()
+    
+    # 1. Filtro Data de IPO
+    def filter_ipo_year(date_str):
+        if pd.isna(date_str) or date_str == "N/A":
+            return True # Mantém ativos sem info de IPO a menos que queira ser estrito
+        try:
+            year = int(str(date_str).split('-')[0])
+            return ano_ipo[0] <= year <= ano_ipo[1]
+        except:
+            return True
+            
+    df_filtered = df_filtered[df_filtered["Data IPO"].apply(filter_ipo_year)]
+    
+    # 2. Filtros Numéricos (Lidando com None/NaN)
+    df_filtered = df_filtered[(df_filtered["P/L (P/E)"].isna()) | (df_filtered["P/L (P/E)"] <= pl_max)]
+    df_filtered = df_filtered[(df_filtered["P/VP (P/B)"].isna()) | (df_filtered["P/VP (P/B)"] <= pvp_max)]
+    df_filtered = df_filtered[(df_filtered["Div. Yield (%)"].isna()) | (df_filtered["Div. Yield (%)"] >= min_dividend)]
+    df_filtered = df_filtered[(df_filtered["ROE (%)"].isna()) | (df_filtered["ROE (%)"] >= min_roe)]
+    df_filtered = df_filtered[(df_filtered["ROIC (%)"].isna()) | (df_filtered["ROIC (%)"] >= min_roic)]
+    
+    if min_mcap_b > 0:
+        min_mcap_raw = min_mcap_b * 1e9
+        df_filtered = df_filtered[(df_filtered["Market Cap"].isna()) | (df_filtered["Market Cap"] >= min_mcap_raw)]
+        
+    # 3. Filtros Categóricos
+    if lucro_apenas:
+        df_filtered = df_filtered[df_filtered["Lucro >0 (4A)?"] == "Sim"]
+    if receita_crescente:
+        df_filtered = df_filtered[df_filtered["Receita Sobe?"] == "Sim"]
 
-if "df_comp" in st.session_state:
-    df_comp = st.session_state.df_comp
+    st.subheader(f"📊 Resultados Filtrados ({len(df_filtered)} ativos)")
     
-    # Limpeza visual
-    df_display = df_comp.drop(columns=["roic_num"], errors="ignore")
+    # Renderização formatada com Pandas Styler
+    st.dataframe(
+        df_filtered.style.format({
+            "Preço Atual": "R$ {:.2f}",
+            "P/L (P/E)": "{:.2f}",
+            "P/VP (P/B)": "{:.2f}",
+            "Div. Yield (%)": "{:.2f}%",
+            "Market Cap": lambda x: f"B$ {x/1e9:.2f}B" if pd.notnull(x) and x > 0 else "N/A",
+            "ROE (%)": "{:.2f}%",
+            "ROIC (%)": "{:.2f}%"
+        }, na_rep="N/A"),
+        use_container_width=True
+    )
     
-    st.subheader("Resultados da Comparação")
-    st.dataframe(df_display, use_container_width=True)
-    
-    # Opção de Favoritar (Adicionar aos Estudos)
-    st.markdown("### ⭐ Favoritar para Estudos")
-    ticker_to_fav = st.selectbox("Escolha um ativo para favoritar:", df_comp["Ticker"].tolist())
-    if st.button("Adicionar aos Estudos"):
-        with Session(engine) as session:
-            ativo = session.exec(select(Ativo).where(Ativo.ticker == ticker_to_fav)).first()
-            if not ativo:
-                # Busca info básica para criar o ativo
-                from finance import get_asset_basic_info
-                info = get_asset_basic_info(ticker_to_fav)
-                ativo = Ativo(ticker=ticker_to_fav, nome=info["nome"], tipo=info["tipo"], favorito=True)
-                session.add(ativo)
-            else:
-                ativo.favorito = True
-                session.add(ativo)
-            session.commit()
-            st.success(f"{ticker_to_fav} adicionado à sua lista de estudos!")
+    # --- FAVORITAR PARA ESTUDOS ---
+    if not df_filtered.empty:
+        st.markdown("### ⭐ Adicionar aos Estudos")
+        ticker_fav = st.selectbox("Escolha um ativo filtrado:", df_filtered["Ticker"].tolist())
+        if st.button("Confirmar Favorito"):
+            with Session(engine) as session:
+                ativo = session.exec(select(Ativo).where(Ativo.ticker == ticker_fav)).first()
+                if not ativo:
+                    from finance import get_asset_basic_info
+                    info = get_asset_basic_info(ticker_fav)
+                    ativo = Ativo(ticker=ticker_fav, nome=info["nome"], tipo=info["tipo"], favorito=True)
+                    session.add(ativo)
+                else:
+                    ativo.favorito = True
+                    session.add(ativo)
+                session.commit()
+                st.success(f"{ticker_fav} pronto para estudos na aba da Carteira!")
 
-    if df_comp.empty:
-        st.info("Nenhum ativo corresponde aos filtros selecionados.")
-    else:
-        # Gráficos
+    # --- COMPARATIVOS VISUAIS (GRÁFICOS) ---
+    if not df_filtered.empty:
+        st.markdown("---")
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader("Comparativo: P/L (P/E Ratio)")
-            df_valid_pl = df_comp[df_comp["P/L (P/E)"] != "N/A"]
-            if not df_valid_pl.empty:
-                fig_pl = px.bar(df_valid_pl, x="Ticker", y="P/L (P/E)", color="Ticker", template="plotly_white")
-                st.plotly_chart(fig_pl, use_container_width=True)
+            st.subheader("Valuation: P/L (P/E)")
+            df_v = df_filtered[df_filtered["P/L (P/E)"].notnull()]
+            if not df_v.empty:
+                fig = px.bar(df_v, x="Ticker", y="P/L (P/E)", color="Ticker", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
         with c2:
-            st.subheader("Comparativo: ROE (%)")
-            df_valid_roe = df_comp[df_comp["ROE (%)"] != "N/A"]
-            if not df_valid_roe.empty:
-                fig_roe = px.bar(df_valid_roe, x="Ticker", y="ROE (%)", color="Ticker", template="plotly_white")
-                st.plotly_chart(fig_roe, use_container_width=True)
-        
+            st.subheader("Rentabilidade: ROE (%)")
+            df_v = df_filtered[df_filtered["ROE (%)"].notnull()]
+            if not df_v.empty:
+                fig = px.bar(df_v, x="Ticker", y="ROE (%)", color="Ticker", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
+
         c3, c4 = st.columns(2)
         with c3:
-            st.subheader("Eficiência: ROIC")
-            df_valid_roic = df_comp[df_comp["ROIC"] != "N/A"]
-            if not df_valid_roic.empty:
-                # Usa a coluna numérica que já tratamos ou recria
-                df_valid_roic["ROIC_val"] = df_valid_roic["ROIC"].str.replace('%','').astype(float)
-                fig_roic = px.bar(df_valid_roic, x="Ticker", y="ROIC_val", color="Ticker", labels={"ROIC_val": "ROIC (%)"})
-                st.plotly_chart(fig_roic, use_container_width=True)
+            st.subheader("Eficiência: ROIC (%)")
+            df_v = df_filtered[df_filtered["ROIC (%)"].notnull()]
+            if not df_v.empty:
+                fig = px.bar(df_v, x="Ticker", y="ROIC (%)", color="Ticker", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
         with c4:
-            st.subheader("Preço / Valor Patrimonial (P/VP)")
-            df_valid_pvp = df_comp[df_comp["P/VP (P/B)"] != "N/A"]
-            if not df_valid_pvp.empty:
-                fig_pvp = px.bar(df_valid_pvp, x="Ticker", y="P/VP (P/B)", color="Ticker")
-                st.plotly_chart(fig_pvp, use_container_width=True)
+            st.subheader("Patrimônio: P/VP (P/B)")
+            df_v = df_filtered[df_filtered["P/VP (P/B)"].notnull()]
+            if not df_v.empty:
+                fig = px.bar(df_v, x="Ticker", y="P/VP (P/B)", color="Ticker", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("Clique em 'Buscar Dados' para iniciar a comparação.")
