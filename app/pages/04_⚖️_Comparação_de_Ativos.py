@@ -6,6 +6,7 @@ from finance import get_asset_metrics, METRICS_HELP
 from database import engine, Ativo
 from sqlmodel import Session, select
 from style import apply_global_style
+from screener_tickers import ALL_SCREENER_TICKERS, TICKERS_IBOVESPA, TICKERS_SP500_TOP
 
 st.set_page_config(page_title="Comparação de Ativos - InvestSmart", layout="wide", page_icon="⚖️")
 
@@ -175,61 +176,78 @@ if "raw_df_comp" in st.session_state:
             with st.spinner("Calculando a máquina do tempo dos investimentos..."):
                 sim_resultados = []
                 hoje = datetime.datetime.now()
-                # Considera anos bissextos aproximadamente
                 data_passado = hoje - datetime.timedelta(days=sim_anos * 365.25)
                 
                 for ticker in df_filtered["Ticker"].tolist():
                     try:
                         t = yf.Ticker(ticker)
-                        # Janela de 10 dias em torno da data alvo para garantir que pega um dia útil de negociação
                         start_date = (data_passado - datetime.timedelta(days=5)).strftime('%Y-%m-%d')
                         end_date = (data_passado + datetime.timedelta(days=5)).strftime('%Y-%m-%d')
-                        
                         hist = t.history(start=start_date, end=end_date)
-                        
                         if not hist.empty:
                             preco_passado = hist['Close'].iloc[0]
-                            # Usa preço atual recente 
                             preco_atual_sim = t.fast_info['lastPrice']
-                            
                             qtd_comprada = sim_valor / preco_passado
                             valor_hoje = qtd_comprada * preco_atual_sim
                             rentab_sim = ((valor_hoje / sim_valor) - 1) * 100
-                            
                             sim_resultados.append({
-                                "Ticker": ticker,
-                                "Preço Pago (R$)": preco_passado,
-                                "Preço Atual (R$)": preco_atual_sim,
-                                "Valor Hoje (R$)": valor_hoje,
+                                "Ticker": ticker, "Preço Pago (R$)": preco_passado,
+                                "Preço Atual (R$)": preco_atual_sim, "Valor Hoje (R$)": valor_hoje,
                                 "Rentabilidade (%)": rentab_sim
                             })
-                    except Exception as e:
+                    except:
                         pass
                 
                 if sim_resultados:
                     df_sim = pd.DataFrame(sim_resultados).sort_values(by="Valor Hoje (R$)", ascending=False)
-                    
                     st.subheader(f"Resultado do Investimento (R$ {sim_valor} há {sim_anos} ano(s))")
-                    st.dataframe(
-                        df_sim.style.format({
-                            "Preço Pago (R$)": "R$ {:.2f}",
-                            "Preço Atual (R$)": "R$ {:.2f}",
-                            "Valor Hoje (R$)": "R$ {:.2f}",
-                            "Rentabilidade (%)": "{:.2f}%"
-                        }).background_gradient(subset=["Rentabilidade (%)", "Valor Hoje (R$)"], cmap="RdYlGn"),
-                        use_container_width=True
-                    )
-                    
-                    # Gráfico
-                    fig_sim = px.bar(df_sim, x="Ticker", y="Valor Hoje (R$)", color="Rentabilidade (%)", 
-                                     color_continuous_scale="RdYlGn", 
-                                     title=f"Evolução Patrimonial: R$ {sim_valor} -> Valor Atual")
+                    st.dataframe(df_sim.style.format({"Preço Pago (R$)": "R$ {:.2f}", "Preço Atual (R$)": "R$ {:.2f}", "Valor Hoje (R$)": "R$ {:.2f}", "Rentabilidade (%)": "{:.2f}%"}).background_gradient(subset=["Rentabilidade (%)", "Valor Hoje (R$)"], cmap="RdYlGn"), use_container_width=True)
+                    fig_sim = px.bar(df_sim, x="Ticker", y="Valor Hoje (R$)", color="Rentabilidade (%)", color_continuous_scale="RdYlGn", title=f"Evolução Patrimonial: R$ {sim_valor} -> Valor Atual")
                     fig_sim.add_hline(y=sim_valor, line_dash="dash", line_color="white", annotation_text="Capital Investido")
                     st.plotly_chart(fig_sim, use_container_width=True)
-                else:
-                    st.warning("Não foi possível encontrar dados históricos suficientes para essa data nas empresas selecionadas.")
 
-else:
-    st.info("Clique em 'Buscar Dados' para iniciar a comparação.")
+# --- SCREENER / EXPORTAÇÃO EM MASSA ---
+st.markdown("---")
+with st.expander("📥 Screener - Exportar Dados em Massa (CSV)", expanded=False):
+    st.write("Baixe dados fundamentalistas de centenas de ativos para filtrar no Excel ou Google Sheets.")
+    
+    modo_export = st.radio("Escolha o lote para exportação:", 
+                           ["Top 50 Ativos (Mais Rápido)", 
+                            "Brasil - IBOVESPA (~80 ativos)", 
+                            "EUA - S&P 500 Top 50", 
+                            "TODOS os ativos (~130 ativos)"])
+    
+    if st.button("🔨 Gerar Arquivo para Download"):
+        if "Top 50" in modo_export:
+            lista_export = ALL_SCREENER_TICKERS[:50]
+        elif "Brasil" in modo_export:
+            lista_export = TICKERS_IBOVESPA
+        elif "EUA" in modo_export:
+            lista_export = TICKERS_SP500_TOP
+        else:
+            lista_export = ALL_SCREENER_TICKERS
+
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        all_results = []
+        batch_size = 10
+        
+        for i in range(0, len(lista_export), batch_size):
+            batch = lista_export[i:i+batch_size]
+            status_text.text(f"Processando ativos {i+1} a {min(i+batch_size, len(lista_export))} de {len(lista_export)}...")
+            res = get_asset_metrics(batch)
+            all_results.extend(res)
+            progress_bar.progress(min((i + batch_size) / len(lista_export), 1.0))
+        
+        df_export = pd.DataFrame(all_results)
+        csv = df_export.to_csv(index=False).encode('utf-8-sig')
+        status_text.success(f"✅ Arquivo gerado com {len(df_export)} ativos!")
+        st.download_button(
+            label="📥 Baixar Dados em CSV",
+            data=csv,
+            file_name=f"investsmart_screener_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+        )
 
 st.sidebar.caption("v0.4.3 - InvestSmart AI Edition")
