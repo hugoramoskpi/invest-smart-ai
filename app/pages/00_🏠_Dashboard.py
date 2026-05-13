@@ -1,87 +1,15 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from database import engine, Ativo, Transacao, create_db_and_tables
+from database import engine, Ativo, Transacao
 from sqlmodel import Session, select
 from finance import calculate_portfolio_performance
-from seed import seed_db
+from style import apply_global_style
 
-# Inicializa o banco de dados e a base imaginária na Home
-create_db_and_tables()
-seed_db()
+st.set_page_config(page_title="Dashboard - InvestSmart", layout="wide", page_icon="📊")
 
-st.set_page_config(
-    page_title="Dashboard - InvestSmart",
-    layout="wide",
-    page_icon="📊"
-)
-
-# Estilo CSS Avançado para o Menu Lateral e Interface
-st.markdown("""
-    <style>
-    /* Estilização do Menu Lateral */
-    section[data-testid="stSidebar"] {
-        background-color: #161b22;
-        border-right: 1px solid #30363d;
-    }
-    
-    section[data-testid="stSidebar"] .st-emotion-cache-16t9854 {
-        color: #c9d1d9;
-    }
-
-    /* Melhora o espaçamento da navegação */
-    [data-testid="stSidebarNav"] ul {
-        padding-top: 1rem;
-    }
-    
-    [data-testid="stSidebarNav"] li a span {
-        font-weight: 500;
-        font-size: 1.05rem;
-    }
-
-    /* Esconde especificamente o link redundante 'main' se ele aparecer */
-    [data-testid="stSidebarNav"] li:first-child {
-        display: none;
-    }
-
-    /* Estilo dos Cards de Métrica */
-    div[data-testid="stMetric"] {
-        background-color: #0d1117;
-        border: 1px solid #30363d;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    
-    div[data-testid="stMetricValue"] {
-        font-size: 1.8rem;
-        color: #58a6ff;
-    }
-
-    /* Botões principais */
-    .stButton>button {
-        border-radius: 8px;
-        background-color: #238636;
-        color: white;
-        border: none;
-        transition: all 0.3s;
-    }
-    .stButton>button:hover {
-        background-color: #2ea043;
-        transform: scale(1.02);
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# Título e Logo no Menu Lateral
-st.sidebar.markdown("""
-    <div style="text-align: center; padding-bottom: 20px;">
-        <h1 style='color: #58a6ff; font-size: 2.2rem;'>🚀</h1>
-        <h2 style='color: #c9d1d9; font-size: 1.2rem; margin-top: -10px;'>InvestSmart</h2>
-        <p style='color: #8b949e; font-size: 0.8rem;'>Controle de Investimentos</p>
-    </div>
-    <hr style="margin: 10px 0; border-color: #30363d;">
-    """, unsafe_allow_html=True)
+# Aplica o Estilo Unificado
+apply_global_style()
 
 st.title("📊 Dashboard Geral da Carteira")
 
@@ -150,5 +78,4 @@ else:
                       color_continuous_scale="Viridis", title="Rentabilidade Percentual por Ativo")
     st.plotly_chart(fig_rent, use_container_width=True)
 
-st.sidebar.markdown("---")
-st.sidebar.caption("v0.4.1 - InvestSmart AI Edition")
+st.sidebar.caption("v0.4.2 - InvestSmart AI Edition")

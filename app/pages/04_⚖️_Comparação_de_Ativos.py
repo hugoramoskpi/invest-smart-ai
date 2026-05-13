@@ -5,10 +5,14 @@ import datetime
 from finance import get_asset_metrics
 from database import engine, Ativo
 from sqlmodel import Session, select
+from style import apply_global_style
 
-st.set_page_config(page_title="Comparação de Ativos - InvestSmart", layout="wide")
+st.set_page_config(page_title="Comparação de Ativos - InvestSmart", layout="wide", page_icon="⚖️")
 
-st.header("⚖️ Comparação de Ativos (Brasil e EUA)")
+# Aplica o Estilo Unificado
+apply_global_style()
+
+st.title("⚖️ Comparação de Ativos (Brasil e EUA)")
 st.write("Compare métricas fundamentalistas e filtre os melhores ativos em tempo real.")
 
 TICKERS_COMUNS = [
@@ -21,10 +25,8 @@ TICKERS_COMUNS = [
 st.sidebar.header("🔍 Filtros Reativos")
 
 current_year = datetime.datetime.now().year
-# Janela Móvel IPO (1800 até hoje)
 ano_ipo = st.sidebar.slider("Janela Data de IPO", 1800, current_year, (1800, current_year))
 
-# Sliders para métricas numéricas
 pl_max = st.sidebar.slider("P/L (P/E) Máximo", -50.0, 200.0, 200.0)
 pvp_max = st.sidebar.slider("P/VP (P/B) Máximo", -10.0, 100.0, 100.0)
 
@@ -32,10 +34,8 @@ min_roic = st.sidebar.slider("ROIC Mínimo (%)", -50.0, 150.0, -50.0)
 min_roe = st.sidebar.slider("ROE Mínimo (%)", -50.0, 150.0, -50.0)
 min_dividend = st.sidebar.slider("Div. Yield Mínimo (%)", 0.0, 50.0, 0.0)
 
-# Market Cap em Bilhões
 min_mcap_b = st.sidebar.number_input("Market Cap Mín. (Bilhões R$/$)", min_value=0.0, value=0.0)
 
-# Filtros Booleanos
 lucro_apenas = st.sidebar.checkbox("Apenas empresas com Lucro (4A)", value=False)
 receita_crescente = st.sidebar.checkbox("Apenas com Receita Crescente", value=False)
 
@@ -48,7 +48,6 @@ tickers_selecionados = st.multiselect(
 
 outros_tickers = st.text_input("Ou digite outros tickers separados por vírgula (Ex: TSLA, GOOGL, ITUB4.SA)")
 
-# --- BOTÃO DE BUSCA (Apenas para carregar dados novos) ---
 if st.button("🚀 Buscar/Atualizar Dados do Mercado"):
     lista_final = list(tickers_selecionados)
     if outros_tickers:
@@ -66,10 +65,9 @@ if st.button("🚀 Buscar/Atualizar Dados do Mercado"):
 if "raw_df_comp" in st.session_state:
     df_filtered = st.session_state.raw_df_comp.copy()
     
-    # 1. Filtro Data de IPO
     def filter_ipo_year(date_str):
         if pd.isna(date_str) or date_str == "N/A":
-            return True # Mantém ativos sem info de IPO a menos que queira ser estrito
+            return True
         try:
             year = int(str(date_str).split('-')[0])
             return ano_ipo[0] <= year <= ano_ipo[1]
@@ -77,8 +75,6 @@ if "raw_df_comp" in st.session_state:
             return True
             
     df_filtered = df_filtered[df_filtered["Data IPO"].apply(filter_ipo_year)]
-    
-    # 2. Filtros Numéricos (Lidando com None/NaN)
     df_filtered = df_filtered[(df_filtered["P/L (P/E)"].isna()) | (df_filtered["P/L (P/E)"] <= pl_max)]
     df_filtered = df_filtered[(df_filtered["P/VP (P/B)"].isna()) | (df_filtered["P/VP (P/B)"] <= pvp_max)]
     df_filtered = df_filtered[(df_filtered["Div. Yield (%)"].isna()) | (df_filtered["Div. Yield (%)"] >= min_dividend)]
@@ -89,7 +85,6 @@ if "raw_df_comp" in st.session_state:
         min_mcap_raw = min_mcap_b * 1e9
         df_filtered = df_filtered[(df_filtered["Market Cap"].isna()) | (df_filtered["Market Cap"] >= min_mcap_raw)]
         
-    # 3. Filtros Categóricos
     if lucro_apenas:
         df_filtered = df_filtered[df_filtered["Lucro >0 (4A)?"] == "Sim"]
     if receita_crescente:
@@ -97,7 +92,6 @@ if "raw_df_comp" in st.session_state:
 
     st.subheader(f"📊 Resultados Filtrados ({len(df_filtered)} ativos)")
     
-    # Renderização formatada com Pandas Styler
     st.dataframe(
         df_filtered.style.format({
             "Preço Atual": "R$ {:.2f}",
@@ -111,7 +105,6 @@ if "raw_df_comp" in st.session_state:
         use_container_width=True
     )
     
-    # --- FAVORITAR PARA ESTUDOS ---
     if not df_filtered.empty:
         st.markdown("### ⭐ Adicionar aos Estudos")
         ticker_fav = st.selectbox("Escolha um ativo filtrado:", df_filtered["Ticker"].tolist())
@@ -129,7 +122,6 @@ if "raw_df_comp" in st.session_state:
                 session.commit()
                 st.success(f"{ticker_fav} pronto para estudos na aba da Carteira!")
 
-    # --- COMPARATIVOS VISUAIS (GRÁFICOS) ---
     if not df_filtered.empty:
         st.markdown("---")
         c1, c2 = st.columns(2)
@@ -161,3 +153,5 @@ if "raw_df_comp" in st.session_state:
                 st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Clique em 'Buscar Dados' para iniciar a comparação.")
+
+st.sidebar.caption("v0.4.2 - InvestSmart AI Edition")
