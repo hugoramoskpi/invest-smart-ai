@@ -85,6 +85,15 @@ def apply_filters(df):
         
     return df_f
 
+def safe_format(val, fmt="{:.2f}"):
+    """Formata valor apenas se for numérico e não nulo."""
+    if pd.isna(val) or val is None:
+        return "N/A"
+    try:
+        return fmt.format(val)
+    except:
+        return str(val)
+
 if modo_analise == "🔍 Tempo Real (Ativos Específicos)":
     TICKERS_COMUNS = ["PETR4.SA", "VALE3.SA", "AAPL", "MSFT", "GOOGL", "AMZN", "BTC-USD"]
     sel_tickers = st.multiselect("Selecione ativos:", TICKERS_COMUNS, default=["PETR4.SA", "AAPL"])
@@ -101,12 +110,18 @@ if modo_analise == "🔍 Tempo Real (Ativos Específicos)":
     if "df_tempo_real" in st.session_state:
         df_res = apply_filters(st.session_state.df_tempo_real)
         st.subheader(f"📊 Resultados ({len(df_res)} ativos)")
+        
+        # Formatação segura para evitar erro NoneType
         st.dataframe(
             df_res.style.format({
-                "Preço Atual": "{:.2f}", "P/L (P/E)": "{:.2f}", "P/VP (P/B)": "{:.2f}", 
-                "Div. Yield (%)": "{:.2f}%", "Market Cap": lambda x: f"B$ {x/1e9:.2f}B" if pd.notnull(x) else "N/A", 
-                "ROE (%)": "{:.2f}%", "ROIC (%)": "{:.2f}%"
-            }), 
+                "Preço Atual": lambda x: safe_format(x, "{:.2f}"),
+                "P/L (P/E)": lambda x: safe_format(x, "{:.2f}"),
+                "P/VP (P/B)": lambda x: safe_format(x, "{:.2f}"),
+                "Div. Yield (%)": lambda x: safe_format(x, "{:.2f}%"),
+                "Market Cap": lambda x: f"B$ {x/1e9:.2f}B" if pd.notnull(x) and x > 0 else "N/A",
+                "ROE (%)": lambda x: safe_format(x, "{:.2f}%"),
+                "ROIC (%)": lambda x: safe_format(x, "{:.2f}%")
+            }, na_rep="N/A"), 
             column_config={k: st.column_config.Column(help=v) for k, v in METRICS_HELP.items()}, 
             use_container_width=True
         )
@@ -158,17 +173,20 @@ else:
         
         search_query = st.text_input("Filtrar por Ticker ou Nome:", "").upper()
         if search_query:
-            # Garante que as colunas são tratadas como string para busca
             df_res = df_res[df_res["Ticker"].astype(str).str.contains(search_query) | df_res["Nome"].astype(str).str.upper().str.contains(search_query)]
 
         st.dataframe(
             df_res.style.format({
-                "Preço Atual": "{:.2f}", "P/L (P/E)": "{:.2f}", "P/VP (P/B)": "{:.2f}", 
-                "Div. Yield (%)": "{:.2f}%", "Market Cap": lambda x: f"B$ {x/1e9:.2f}B" if pd.notnull(x) else "N/A", 
-                "ROE (%)": "{:.2f}%", "ROIC (%)": "{:.2f}%"
-            }), 
+                "Preço Atual": lambda x: safe_format(x, "{:.2f}"),
+                "P/L (P/E)": lambda x: safe_format(x, "{:.2f}"),
+                "P/VP (P/B)": lambda x: safe_format(x, "{:.2f}"),
+                "Div. Yield (%)": lambda x: safe_format(x, "{:.2f}%"),
+                "Market Cap": lambda x: f"B$ {x/1e9:.2f}B" if pd.notnull(x) and x > 0 else "N/A",
+                "ROE (%)": lambda x: safe_format(x, "{:.2f}%"),
+                "ROIC (%)": lambda x: safe_format(x, "{:.2f}%")
+            }, na_rep="N/A"), 
             column_config={k: st.column_config.Column(help=v) for k, v in METRICS_HELP.items()}, 
             use_container_width=True
         )
 
-st.sidebar.caption("v0.5.2 - InvestSmart Global Edition")
+st.sidebar.caption("v0.5.3 - InvestSmart Global Edition")
